@@ -3,6 +3,7 @@
  * Sources: Seattle Times, The Stranger, Crosscut, West Seattle Blog, MyNorthwest
  */
 import Parser from 'rss-parser';
+import fetch from 'node-fetch';
 import { cleanText, parseDate } from '../utils/fetch.js';
 
 const rssParser = new Parser();
@@ -50,7 +51,13 @@ const SOURCES = [
 ];
 
 async function scrapeSource(source) {
-  const feed = await rssParser.parseURL(source.url);
+  // Fetch raw XML ourselves to avoid the url.parse() deprecation inside rss-parser,
+  // and sanitize unescaped ampersands so malformed feeds (e.g. The Stranger) don't fail.
+  const res = await fetch(source.url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const raw = await res.text();
+  const sanitized = raw.replace(/&(?!(?:#\d+|#x[\da-fA-F]+|[a-zA-Z]\w*);)/g, '&amp;');
+  const feed = await rssParser.parseString(sanitized);
 
   return feed.items
     .slice(0, 20)

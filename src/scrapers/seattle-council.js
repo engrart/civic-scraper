@@ -4,8 +4,17 @@
  */
 import { fetchHTML, fetchJSON, cleanText, parseDate } from '../utils/fetch.js';
 import Parser from 'rss-parser';
+import fetch from 'node-fetch';
 
 const rssParser = new Parser();
+
+async function parseRssFromUrl(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const raw = await res.text();
+  const sanitized = raw.replace(/&(?!(?:#\d+|#x[\da-fA-F]+|[a-zA-Z]\w*);)/g, '&amp;');
+  return rssParser.parseString(sanitized);
+}
 
 export const SOURCE_NAME = 'Seattle City Council';
 
@@ -68,7 +77,7 @@ export async function scrapeRecentLegislation() {
  */
 export async function scrapeSeattleChannel() {
   try {
-    const feed = await rssParser.parseURL('https://www.seattlechannel.org/rss.xml');
+    const feed = await parseRssFromUrl('https://www.seattlechannel.org/rss.xml');
     return feed.items.slice(0, 15).map(item => ({
       source_url: item.link || item.guid,
       source_name: 'Seattle Channel',

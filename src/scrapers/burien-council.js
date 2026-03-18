@@ -4,11 +4,20 @@
  */
 import { fetchHTML, cleanText, parseDate } from '../utils/fetch.js';
 import Parser from 'rss-parser';
+import fetch from 'node-fetch';
 
 const rssParser = new Parser();
 export const SOURCE_NAME = 'Burien City Council';
 
 const BASE_URL = 'https://burienwa.gov';
+
+async function parseRssFromUrl(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const raw = await res.text();
+  const sanitized = raw.replace(/&(?!(?:#\d+|#x[\da-fA-F]+|[a-zA-Z]\w*);)/g, '&amp;');
+  return rssParser.parseString(sanitized);
+}
 
 /**
  * Scrape upcoming Burien City Council agendas/meetings.
@@ -49,7 +58,7 @@ export async function scrapeBurienMeetings() {
 export async function scrapeBurienNews() {
   try {
     // Try their news RSS if available
-    const feed = await rssParser.parseURL(`${BASE_URL}/feed`);
+    const feed = await parseRssFromUrl(`${BASE_URL}/feed`);
     return feed.items.slice(0, 15).map(item => ({
       source_url: item.link || item.guid,
       source_name: 'Burien City News',
@@ -72,7 +81,7 @@ export async function scrapeBurienNews() {
  */
 export async function scrapeBTownBlog() {
   try {
-    const feed = await rssParser.parseURL('https://b-townblog.com/feed/');
+    const feed = await parseRssFromUrl('https://b-townblog.com/feed/');
     return feed.items.slice(0, 15)
       .filter(item => {
         const text = (item.title + ' ' + item.contentSnippet).toLowerCase();
