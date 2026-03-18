@@ -8,19 +8,18 @@ import { cleanText, parseDate } from '../utils/fetch.js';
 
 const rssParser = new Parser();
 
+const RSS_REQUEST_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+  Accept: 'application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8',
+};
+
 // Political keyword filter — only surface politically relevant stories
 const POLITICAL_KEYWORDS = /council|mayor|elect|vote|ballot|ordinance|budget|tax|police|transit|housing|zoning|permit|campaign|candidate|democrat|republican|progressive|levy|bond|district|senator|representative|governor|school board|port commissioner|initiative|referendum|recall/i;
 
 const SOURCES = [
   {
-    name: 'Seattle Times Politics',
-    url: 'https://www.seattletimes.com/tag/seattle-city-council/feed/',
-    city: 'seattle',
-    tags: ['seattle-times', 'news'],
-  },
-  {
     name: 'The Stranger',
-    url: 'https://www.thestranger.com/seattle/RSSFeed?department=News',
+    url: 'https://www.thestranger.com/seattle/Rss.xml',
     city: 'seattle',
     tags: ['the-stranger', 'news'],
   },
@@ -53,7 +52,7 @@ const SOURCES = [
 async function scrapeSource(source) {
   // Fetch raw XML ourselves to avoid the url.parse() deprecation inside rss-parser,
   // and sanitize unescaped ampersands so malformed feeds (e.g. The Stranger) don't fail.
-  const res = await fetch(source.url);
+  const res = await fetch(source.url, { headers: RSS_REQUEST_HEADERS });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const raw = await res.text();
   const sanitized = raw.replace(/&(?!(?:#\d+|#x[\da-fA-F]+|[a-zA-Z]\w*);)/g, '&amp;');
