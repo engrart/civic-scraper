@@ -26,8 +26,10 @@ export async function scrapeCouncilMeetings() {
   const url = 'https://webapi.legistar.com/v1/seattle/events?$top=20&$orderby=EventDate desc';
   const data = await fetchJSON(url);
 
-  return data.map(event => ({
-    source_url: `https://seattle.legistar.com/MeetingDetail.aspx?ID=${event.EventId}`,
+  return data
+    .filter(event => event.EventAgendaStatusName !== 'Cancelled')
+    .map(event => ({
+    source_url: event.EventInSiteURL || `https://seattle.legistar.com/MeetingDetail.aspx?LEGID=${event.EventId}&GID=393&G=${event.EventGuid}`,
     source_name: SOURCE_NAME,
     title: `${event.EventBodyName}: ${event.EventAgendaStatusName}`,
     body: [
@@ -47,17 +49,39 @@ export async function scrapeCouncilMeetings() {
 /**
  * Scrape recent Seattle legislation/bills from Legistar.
  */
+async function getLegislationUrl(matter) {
+  // LegislationDetail.aspx is blocked on Seattle's Legistar (returns "Invalid parameters!").
+  // Legislation.aspx?Search= pre-fills the search box but doesn't auto-execute the search,
+  // so users see 0 results. Instead, link directly to the first public PDF/doc attachment.
+  try {
+    const attachments = await fetchJSON(
+      `https://webapi.legistar.com/v1/seattle/matters/${matter.MatterId}/attachments`
+    );
+    const visible = attachments.filter(a => a.MatterAttachmentShowOnInternetPage && a.MatterAttachmentHyperlink);
+    const pdf = visible.find(a => a.MatterAttachmentHyperlink.toLowerCase().endsWith('.pdf'));
+    const best = pdf || visible[0];
+    if (best) return best.MatterAttachmentHyperlink;
+  } catch {
+    // fall through to search page
+  }
+  return `https://seattle.legistar.com/Legislation.aspx?Search=${encodeURIComponent(matter.MatterFile || matter.MatterName || '')}`;
+}
+
 export async function scrapeRecentLegislation() {
   const url = 'https://webapi.legistar.com/v1/seattle/matters?$top=20&$orderby=MatterLastModifiedUtc desc';
   const data = await fetchJSON(url);
 
-  return data
-    .filter(m => m.MatterTitle && m.MatterStatusName !== 'Adopted') // skip old closed items
-    .map(matter => ({
-      source_url: `https://seattle.legistar.com/LegislationDetail.aspx?ID=${matter.MatterId}`,
+  const matters = data.filter(m => m.MatterTitle && m.MatterStatusName !== 'Adopted');
+
+  // Fetch attachment URLs in parallel (one request per matter)
+  const sourceUrls = await Promise.all(matters.map(getLegislationUrl));
+
+  return matters.map((matter, i) => ({
+      source_url: sourceUrls[i],
       source_name: SOURCE_NAME,
       title: cleanText(matter.MatterTitle),
       body: [
+        matter.MatterFile ? `File: ${matter.MatterFile}` : '',
         matter.MatterTypeName,
         matter.MatterTitle,
         matter.MatterBodyName ? `Body: ${matter.MatterBodyName}` : '',

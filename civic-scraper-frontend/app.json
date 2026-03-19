@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "Civic",
+    "slug": "civic-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#534AB7"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.yourname.civicapp"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#534AB7"
+      },
+      "package": "com.yourname.civicapp"
+    },
+    "scheme": "civicapp",
+    "plugins": [
+      "expo-router",
+      "expo-asset"
+    ]
+  }
+}

@@ -13,9 +13,11 @@
     "@anthropic-ai/sdk": "^0.39.0",
     "@supabase/supabase-js": "^2.47.0",
     "cheerio": "^1.0.0",
+    "dotenv": "^16.4.5",
+    "expo": "^55.0.8",
     "node-cron": "^3.0.3",
     "node-fetch": "^3.3.2",
-    "rss-parser": "^3.13.0",
-    "dotenv": "^16.4.5"
+    "react-native": "0.83.2",
+    "rss-parser": "^3.13.0"
   }
 }
