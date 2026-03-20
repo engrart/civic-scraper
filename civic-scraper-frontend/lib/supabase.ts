@@ -38,5 +38,4 @@ export type CivicItem = {
   is_read: boolean;
   is_starred: boolean;
   importance_score: number;
-  vote_result: 'passed' | 'failed' | null;
 };
