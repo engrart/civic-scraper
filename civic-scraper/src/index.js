@@ -13,7 +13,7 @@ import { scrapeAll as scrapeBurienCouncil } from './scrapers/burien-council.js';
 import { scrapeAll as scrapePDC } from './scrapers/pdc-finance.js';
 import { scrapeAll as scrapeLocalNews } from './scrapers/local-news.js';
 import { enrichBatch } from './enrichment/ai-enricher.js';
-import { upsertItems, getExistingUrls, startScrapeRun, finishScrapeRun } from './db/client.js';
+import { upsertItems, updateVoteResults, getExistingUrls, startScrapeRun, finishScrapeRun } from './db/client.js';
 
 const SCRAPERS = [
   { name: 'Seattle City Council', fn: scrapeSeattleCouncil },
@@ -54,8 +54,12 @@ async function runScrape() {
   const allUrls = rawItems.map(i => i.source_url).filter(Boolean);
   const existingUrls = await getExistingUrls(allUrls);
   const newItems = rawItems.filter(i => i.source_url && !existingUrls.has(i.source_url));
+  const existingItems = rawItems.filter(i => i.source_url && existingUrls.has(i.source_url));
 
   console.log(`🔍 New items (not yet in DB): ${newItems.length} / ${rawItems.length}`);
+
+  // Update vote_result on already-existing items (upsert ignores them otherwise)
+  await updateVoteResults(existingItems);
 
   if (newItems.length === 0) {
     console.log('✅ Nothing new. DB is up to date.');

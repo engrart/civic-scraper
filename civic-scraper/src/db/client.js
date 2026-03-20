@@ -27,6 +27,23 @@ export async function upsertItems(items) {
 }
 
 /**
+ * Update vote_result for items that already exist in the DB (matched by source_url).
+ */
+export async function updateVoteResults(items) {
+  const withResult = items.filter(i => i.vote_result && i.source_url);
+  if (!withResult.length) return;
+
+  await Promise.all(
+    withResult.map(item =>
+      supabase
+        .from('civic_items')
+        .update({ vote_result: item.vote_result })
+        .eq('source_url', item.source_url)
+    )
+  );
+}
+
+/**
  * Check which URLs already exist in the DB (to skip re-scraping).
  */
 export async function getExistingUrls(urls) {
