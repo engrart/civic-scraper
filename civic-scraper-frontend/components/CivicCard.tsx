@@ -49,16 +49,6 @@ export default function CivicCard({ item, onStarToggle }: Props) {
             {item.category.toUpperCase()}
           </Text>
         </View>
-        {item.vote_result === 'passed' && (
-          <View style={[styles.badge, styles.passedBadge]}>
-            <Text style={[styles.badgeText, styles.passedText]}>PASSED</Text>
-          </View>
-        )}
-        {item.vote_result === 'failed' && (
-          <View style={[styles.badge, styles.failedBadge]}>
-            <Text style={[styles.badgeText, styles.failedText]}>FAILED</Text>
-          </View>
-        )}
         <Text style={[styles.cityTag, { color: t.textTertiary }]}>{item.city}</Text>
         <View style={styles.dots}>
           {[1, 2, 3].map(n => (
@@ -131,10 +121,6 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 10, fontWeight: '600', letterSpacing: 0.5,
   },
-  passedBadge: { backgroundColor: '#E6F6EC' },
-  passedText: { color: '#1A7A3C' },
-  failedBadge: { backgroundColor: '#FCEBEB' },
-  failedText: { color: '#A32D2D' },
   cityTag: {
     fontSize: 11, marginLeft: 'auto',
   },
