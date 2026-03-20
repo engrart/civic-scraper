@@ -23,6 +23,11 @@ export default function PurpleHeader({ title, chips, activeChip, onChipPress }: 
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          directionalLockEnabled
+          nestedScrollEnabled
+          alwaysBounceVertical={false}
+          contentInsetAdjustmentBehavior="never"
+          style={styles.chipScroller}
           contentContainerStyle={styles.chipRow}
         >
           {chips.map(chip => {
@@ -58,10 +63,15 @@ const styles = StyleSheet.create({
     color: Colors.purple50,
     marginBottom: 10,
   },
+  chipScroller: {
+    marginHorizontal: -16,
+    paddingHorizontal: 16,
+  },
   chipRow: {
     flexDirection: 'row',
     gap: 8,
     paddingBottom: 12,
+    paddingRight: 16,
   },
   chip: {
     paddingHorizontal: 14,

@@ -7,15 +7,29 @@ type Filter = {
   category?: string;
 };
 
-export function useCivicItems(filter: Filter = {}) {
-  const [items, setItems] = useState<CivicItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+type UseCivicItemsOptions = {
+  enabled?: boolean;
+};
 
-  const fetch = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+const civicItemsCache = new Map<string, CivicItem[]>();
+const inFlightRequests = new Map<string, Promise<CivicItem[]>>();
 
+function getFilterKey(filter: Filter) {
+  return `${filter.city ?? 'all'}::${filter.category ?? 'all'}`;
+}
+
+async function loadCivicItems(filter: Filter, { force = false } = {}) {
+  const key = getFilterKey(filter);
+
+  if (!force && civicItemsCache.has(key)) {
+    return civicItemsCache.get(key) ?? [];
+  }
+
+  if (!force && inFlightRequests.has(key)) {
+    return inFlightRequests.get(key) ?? Promise.resolve([]);
+  }
+
+  const request = (async () => {
     let query = supabase
       .from('civic_items')
       .select('*')
@@ -25,19 +39,72 @@ export function useCivicItems(filter: Filter = {}) {
     if (filter.city) query = query.eq('city', filter.city);
     if (filter.category) query = query.eq('category', filter.category);
 
-    const { data, error: err } = await query;
+    const { data, error } = await query;
 
-    if (err) {
-      setError(err.message);
-    } else {
-      setItems(data as CivicItem[]);
+    if (error) {
+      throw new Error(error.message);
     }
-    setLoading(false);
-  }, [filter.city, filter.category]);
 
-  useEffect(() => { fetch(); }, [fetch]);
+    const items = (data as CivicItem[]) ?? [];
+    civicItemsCache.set(key, items);
+    return items;
+  })();
 
-  return { items, loading, error, refetch: fetch };
+  inFlightRequests.set(key, request);
+
+  try {
+    return await request;
+  } finally {
+    inFlightRequests.delete(key);
+  }
+}
+
+export async function prefetchCivicItems(filter: Filter) {
+  await loadCivicItems(filter);
+}
+
+export function useCivicItems(filter: Filter = {}, options: UseCivicItemsOptions = {}) {
+  const enabled = options.enabled ?? true;
+  const filterKey = getFilterKey(filter);
+  const cachedItems = civicItemsCache.get(filterKey) ?? [];
+
+  const [items, setItems] = useState<CivicItem[]>(cachedItems);
+  const [loading, setLoading] = useState(enabled && cachedItems.length === 0);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetch = useCallback(async (force = false) => {
+    if (!enabled) return;
+
+    const cached = civicItemsCache.get(filterKey);
+    if (cached && !force) {
+      setItems(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
+    setError(null);
+
+    try {
+      const nextItems = await loadCivicItems(filter, { force });
+      setItems(nextItems);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load items');
+    } finally {
+      setLoading(false);
+    }
+  }, [enabled, filter.city, filter.category, filterKey]);
+
+  useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+
+    fetch();
+  }, [enabled, fetch]);
+
+  return { items, loading, error, refetch: () => fetch(true) };
 }
 
 export function useUpcomingEvents() {

@@ -1,17 +1,26 @@
 // app/_layout.tsx
 import { Tabs } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { useColorScheme, Platform } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Colors } from '../lib/theme';
 
-function TabBarIcon({ name, focused }: { name: string; focused: boolean }) {
-  // Simple text icons — no icon library needed
-  const icons: Record<string, string> = {
-    feed: '≡',
-    upcoming: '▦',
-    starred: '★',
+function TabBarIcon({
+  name,
+  focused,
+  color,
+}: {
+  name: 'feed' | 'upcoming' | 'starred';
+  focused: boolean;
+  color: string;
+}) {
+  const icons = {
+    feed: focused ? 'newspaper' : 'newspaper-outline',
+    upcoming: focused ? 'calendar' : 'calendar-outline',
+    starred: focused ? 'star' : 'star-outline',
   };
-  return null; // using tabBarLabel only is fine; swap in expo-symbols if desired
+
+  return <Ionicons name={icons[name]} size={20} color={color} />;
 }
 
 export default function RootLayout() {
@@ -43,7 +52,7 @@ export default function RootLayout() {
           options={{
             title: 'Feed',
             tabBarIcon: ({ focused, color }) => (
-              <TabBarIcon name="feed" focused={focused} />
+              <TabBarIcon name="feed" focused={focused} color={color} />
             ),
           }}
         />
@@ -52,7 +61,7 @@ export default function RootLayout() {
           options={{
             title: 'Upcoming',
             tabBarIcon: ({ focused, color }) => (
-              <TabBarIcon name="upcoming" focused={focused} />
+              <TabBarIcon name="upcoming" focused={focused} color={color} />
             ),
           }}
         />
@@ -61,7 +70,7 @@ export default function RootLayout() {
           options={{
             title: 'Starred',
             tabBarIcon: ({ focused, color }) => (
-              <TabBarIcon name="starred" focused={focused} />
+              <TabBarIcon name="starred" focused={focused} color={color} />
             ),
           }}
         />
