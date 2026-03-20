@@ -52,7 +52,7 @@ export default function FeedScreen() {
   return (
     <View style={[styles.screen, { backgroundColor: t.background }]}>
       <PurpleHeader
-        title="Local Politics"
+        title="Civic-Scraper"
         chips={CHIPS}
         activeChip={activeChip}
         onChipPress={setActiveChip}
