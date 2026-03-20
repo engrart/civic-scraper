@@ -67,11 +67,19 @@ async function getLegislationUrl(matter) {
   return `https://seattle.legistar.com/Legislation.aspx?Search=${encodeURIComponent(matter.MatterFile || matter.MatterName || '')}`;
 }
 
+function deriveVoteResult(statusName) {
+  if (!statusName) return null;
+  const s = statusName.toLowerCase();
+  if (s === 'adopted' || s === 'passed') return 'passed';
+  if (s === 'failed' || s === 'rejected' || s === 'defeated') return 'failed';
+  return null;
+}
+
 export async function scrapeRecentLegislation() {
   const url = 'https://webapi.legistar.com/v1/seattle/matters?$top=20&$orderby=MatterLastModifiedUtc desc';
   const data = await fetchJSON(url);
 
-  const matters = data.filter(m => m.MatterTitle && m.MatterStatusName !== 'Adopted');
+  const matters = data.filter(m => m.MatterTitle);
 
   // Fetch attachment URLs in parallel (one request per matter)
   const sourceUrls = await Promise.all(matters.map(getLegislationUrl));
@@ -93,6 +101,7 @@ export async function scrapeRecentLegislation() {
       published_at: parseDate(matter.MatterLastModifiedUtc),
       tags: ['legislation', matter.MatterTypeName?.toLowerCase().replace(/\s+/g, '-')].filter(Boolean),
       politicians: [],
+      vote_result: deriveVoteResult(matter.MatterStatusName),
     }));
 }
 
