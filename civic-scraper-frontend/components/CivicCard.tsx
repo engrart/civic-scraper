@@ -12,6 +12,25 @@ type Props = {
   onStarToggle?: () => void;
 };
 
+function getVoteStatusLabel(status: CivicItem['vote_result']) {
+  if (status === 'passed') return 'Passed';
+  if (status === 'failed') return 'Failed';
+  if (status === 'pending') return 'Pending';
+  return null;
+}
+
+function getVoteStatusColors(status: CivicItem['vote_result'], dark: boolean) {
+  if (status === 'passed') {
+    return { bg: dark ? '#173422' : '#E6F6EA', text: dark ? '#8FE3AB' : '#23663A' };
+  }
+
+  if (status === 'failed') {
+    return { bg: dark ? '#3D1E20' : '#FCEBEB', text: dark ? '#F0A7AD' : '#A32D2D' };
+  }
+
+  return { bg: dark ? '#3B3320' : '#FAEEDA', text: dark ? '#F2CF85' : '#854F0B' };
+}
+
 function timeAgo(dateStr: string | null): string {
   if (!dateStr) return '';
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -28,6 +47,8 @@ export default function CivicCard({ item, onStarToggle }: Props) {
   const dark = scheme === 'dark';
   const t = dark ? Colors.dark : Colors.light;
   const catColor = Colors.category[item.category] ?? Colors.category.other;
+  const voteStatusLabel = item.category === 'vote' ? getVoteStatusLabel(item.vote_result) : null;
+  const voteStatusColors = voteStatusLabel ? getVoteStatusColors(item.vote_result, dark) : null;
 
   async function handleStar() {
     await toggleStar(item.id, item.is_starred);
@@ -49,6 +70,13 @@ export default function CivicCard({ item, onStarToggle }: Props) {
             {item.category.toUpperCase()}
           </Text>
         </View>
+        {voteStatusLabel && voteStatusColors ? (
+          <View style={[styles.statusPill, { backgroundColor: voteStatusColors.bg }]}>
+            <Text style={[styles.statusText, { color: voteStatusColors.text }]}>
+              {voteStatusLabel}
+            </Text>
+          </View>
+        ) : null}
         <Text style={[styles.cityTag, { color: t.textTertiary }]}>{item.city}</Text>
         <View style={styles.dots}>
           {[1, 2, 3].map(n => (
@@ -132,6 +160,15 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 14, fontWeight: '500', lineHeight: 20, marginBottom: 6,
+  },
+  statusPill: {
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   summary: {
     fontSize: 13, lineHeight: 19, marginBottom: 10,

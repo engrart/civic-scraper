@@ -18,6 +18,20 @@ async function parseRssFromUrl(url) {
 
 export const SOURCE_NAME = 'Seattle City Council';
 
+function normalizeVoteStatus(status) {
+  if (!status) return null;
+
+  if (/(passed|adopted|approved|confirmed|granted)/i.test(status)) {
+    return 'passed';
+  }
+
+  if (/(failed|rejected|denied|lost|not\s+passed)/i.test(status)) {
+    return 'failed';
+  }
+
+  return 'pending';
+}
+
 /**
  * Scrape upcoming council meetings from the Legistar API (Seattle uses Legistar).
  * Legistar has an open JSON API — no scraping needed.
@@ -71,7 +85,7 @@ export async function scrapeRecentLegislation() {
   const url = 'https://webapi.legistar.com/v1/seattle/matters?$top=20&$orderby=MatterLastModifiedUtc desc';
   const data = await fetchJSON(url);
 
-  const matters = data.filter(m => m.MatterTitle && m.MatterStatusName !== 'Adopted');
+  const matters = data.filter(m => m.MatterTitle);
 
   // Fetch attachment URLs in parallel (one request per matter)
   const sourceUrls = await Promise.all(matters.map(getLegislationUrl));
@@ -88,6 +102,7 @@ export async function scrapeRecentLegislation() {
         matter.MatterStatusName ? `Status: ${matter.MatterStatusName}` : '',
       ].filter(Boolean).join('\n'),
       category: 'vote',
+      vote_result: normalizeVoteStatus(matter.MatterStatusName),
       city: 'seattle',
       event_date: null,
       published_at: parseDate(matter.MatterLastModifiedUtc),

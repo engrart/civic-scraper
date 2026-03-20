@@ -27,7 +27,7 @@ async function runScrape() {
   const runId = await startScrapeRun();
   const allErrors = [];
   let totalFound = 0;
-  let totalInserted = 0;
+  let totalSaved = 0;
 
   // 1. Run all scrapers in parallel
   console.log('\n📡 Scraping sources...');
@@ -53,27 +53,29 @@ async function runScrape() {
   // 3. Deduplicate against existing DB records
   const allUrls = rawItems.map(i => i.source_url).filter(Boolean);
   const existingUrls = await getExistingUrls(allUrls);
-  const newItems = rawItems.filter(i => i.source_url && !existingUrls.has(i.source_url));
+  const itemsToProcess = rawItems.filter(i => i.source_url && (i.category === 'vote' || !existingUrls.has(i.source_url)));
+  const refreshedVotes = itemsToProcess.filter(i => i.category === 'vote' && existingUrls.has(i.source_url)).length;
+  const newItems = itemsToProcess.filter(i => !existingUrls.has(i.source_url)).length;
 
-  console.log(`🔍 New items (not yet in DB): ${newItems.length} / ${rawItems.length}`);
+  console.log(`🔍 Items to process: ${itemsToProcess.length} / ${rawItems.length} (${newItems} new, ${refreshedVotes} vote refreshes)`);
 
-  if (newItems.length === 0) {
+  if (itemsToProcess.length === 0) {
     console.log('✅ Nothing new. DB is up to date.');
     await finishScrapeRun(runId, { sources_attempted: SCRAPERS.length, items_found: totalFound, items_inserted: 0, errors: allErrors });
     return;
   }
 
   // 4. AI enrichment
-  console.log(`\n🤖 Running AI enrichment on ${newItems.length} items...`);
-  const { enriched, errors: enrichErrors } = await enrichBatch(newItems);
+  console.log(`\n🤖 Running AI enrichment on ${itemsToProcess.length} items...`);
+  const { enriched, errors: enrichErrors } = await enrichBatch(itemsToProcess);
   allErrors.push(...enrichErrors.map(e => ({ source: 'AI enricher', ...e })));
 
   // 5. Save to Supabase
   console.log(`\n💾 Saving to Supabase...`);
-  const { inserted, skipped } = await upsertItems(enriched);
-  totalInserted = inserted;
+  const { saved } = await upsertItems(enriched);
+  totalSaved = saved;
 
-  console.log(`✅ Done! Inserted: ${inserted}, Skipped (duplicates): ${skipped}`);
+  console.log(`✅ Done! Saved: ${saved}`);
 
   if (allErrors.length) {
     console.log(`\n⚠️  Errors (${allErrors.length}):`);
@@ -83,7 +85,7 @@ async function runScrape() {
   await finishScrapeRun(runId, {
     sources_attempted: SCRAPERS.length,
     items_found: totalFound,
-    items_inserted: totalInserted,
+    items_inserted: totalSaved,
     errors: allErrors,
     finished_at: new Date().toISOString(),
   });

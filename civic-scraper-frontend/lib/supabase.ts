@@ -27,6 +27,7 @@ export type CivicItem = {
   summary: string | null;
   body: string | null;
   category: 'meeting' | 'vote' | 'event' | 'news' | 'fundraiser' | 'filing' | 'other';
+  vote_result: 'passed' | 'failed' | 'pending' | null;
   city: 'seattle' | 'burien' | 'king_county' | 'regional' | 'other';
   tags: string[];
   politicians: string[];

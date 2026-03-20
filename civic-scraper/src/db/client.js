@@ -8,22 +8,21 @@ export const supabase = createClient(
 );
 
 /**
- * Insert a batch of civic items, ignoring duplicates (by source_url).
- * Returns { inserted, skipped }
+ * Insert or update a batch of civic items by source_url.
+ * Returns { saved }
  */
 export async function upsertItems(items) {
-  if (!items.length) return { inserted: 0, skipped: 0 };
+  if (!items.length) return { saved: 0 };
 
   const { data, error } = await supabase
     .from('civic_items')
-    .upsert(items, { onConflict: 'source_url', ignoreDuplicates: true })
+    .upsert(items, { onConflict: 'source_url' })
     .select('id');
 
   if (error) throw new Error(`DB upsert error: ${error.message}`);
 
-  const inserted = data?.length ?? 0;
-  const skipped = items.length - inserted;
-  return { inserted, skipped };
+  const saved = data?.length ?? 0;
+  return { saved };
 }
 
 /**

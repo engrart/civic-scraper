@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS civic_items (
   summary TEXT,                        -- AI-generated 2-sentence summary
   body TEXT,                           -- raw scraped content
   category TEXT,                       -- 'vote', 'meeting', 'event', 'news', 'fundraiser', 'filing'
+  vote_result TEXT,                    -- 'passed', 'failed', 'pending' for vote items
   city TEXT,                           -- 'seattle', 'burien', 'king_county', 'regional'
   tags TEXT[],                         -- ['housing', 'budget', 'transit', ...]
   politicians TEXT[],                  -- extracted names
@@ -21,11 +22,15 @@ CREATE TABLE IF NOT EXISTS civic_items (
   UNIQUE(source_url)
 );
 
+ALTER TABLE civic_items
+  ADD COLUMN IF NOT EXISTS vote_result TEXT;
+
 -- Index for fast querying
 CREATE INDEX IF NOT EXISTS idx_civic_items_city ON civic_items(city);
 CREATE INDEX IF NOT EXISTS idx_civic_items_category ON civic_items(category);
 CREATE INDEX IF NOT EXISTS idx_civic_items_scraped_at ON civic_items(scraped_at DESC);
 CREATE INDEX IF NOT EXISTS idx_civic_items_event_date ON civic_items(event_date);
+CREATE INDEX IF NOT EXISTS idx_civic_items_vote_result ON civic_items(vote_result);
 
 -- Scrape run log (for debugging/monitoring)
 CREATE TABLE IF NOT EXISTS scrape_runs (
