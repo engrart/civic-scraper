@@ -1,6 +1,6 @@
 // src/components/PurpleHeader.tsx
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Colors } from '../lib/theme';
 
@@ -18,7 +18,14 @@ export default function PurpleHeader({ title, chips, activeChip, onChipPress }: 
 
   return (
     <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-      <Text style={styles.title}>{title}</Text>
+      <View style={styles.titleRow}>
+        <Image
+          source={require('../assets/images/civic-mark.png')}
+          style={styles.titleIcon}
+          resizeMode="contain"
+        />
+        <Text style={styles.title}>{title}</Text>
+      </View>
       {chips && (
         <ScrollView
           horizontal
@@ -57,11 +64,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 0,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginBottom: 6,
+  },
+  titleIcon: {
+    width: 44,
+    height: 44,
+  },
   title: {
     fontSize: 26,
     fontWeight: '500',
     color: Colors.purple50,
-    marginBottom: 10,
   },
   chipScroller: {
     marginHorizontal: -16,
