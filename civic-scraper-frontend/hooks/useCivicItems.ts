@@ -66,11 +66,13 @@ export async function prefetchCivicItems(filter: Filter) {
 export function useCivicItems(filter: Filter = {}, options: UseCivicItemsOptions = {}) {
   const enabled = options.enabled ?? true;
   const filterKey = getFilterKey(filter);
+  const hasCachedEntry = civicItemsCache.has(filterKey);
   const cachedItems = civicItemsCache.get(filterKey) ?? [];
 
   const [items, setItems] = useState<CivicItem[]>(cachedItems);
-  const [loading, setLoading] = useState(enabled && cachedItems.length === 0);
+  const [loading, setLoading] = useState(enabled && !hasCachedEntry);
   const [error, setError] = useState<string | null>(null);
+  const [hasFetched, setHasFetched] = useState(hasCachedEntry);
 
   const fetch = useCallback(async (force = false) => {
     if (!enabled) return;
@@ -79,6 +81,7 @@ export function useCivicItems(filter: Filter = {}, options: UseCivicItemsOptions
     if (cached && !force) {
       setItems(cached);
       setLoading(false);
+      setHasFetched(true);
     } else {
       setLoading(true);
     }
@@ -88,8 +91,10 @@ export function useCivicItems(filter: Filter = {}, options: UseCivicItemsOptions
     try {
       const nextItems = await loadCivicItems(filter, { force });
       setItems(nextItems);
+      setHasFetched(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load items');
+      setHasFetched(true);
     } finally {
       setLoading(false);
     }
@@ -104,7 +109,7 @@ export function useCivicItems(filter: Filter = {}, options: UseCivicItemsOptions
     fetch();
   }, [enabled, fetch]);
 
-  return { items, loading, error, refetch: () => fetch(true) };
+  return { items, loading, error, hasFetched, refetch: () => fetch(true) };
 }
 
 export function useUpcomingEvents() {

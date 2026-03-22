@@ -1,9 +1,10 @@
 // app/index.tsx  — Feed screen
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import {
-  FlatList, View, Text, ActivityIndicator, StyleSheet,
-  useColorScheme, RefreshControl, PanResponder, Animated, useWindowDimensions,
+  FlatList, View, Text, StyleSheet, Animated,
+  useColorScheme, RefreshControl,
 } from 'react-native';
+import PagerView from 'react-native-pager-view';
 import PurpleHeader from '../components/PurpleHeader';
 import CivicCard from '../components/CivicCard';
 import { prefetchCivicItems, useCivicItems } from '../hooks/useCivicItems';
@@ -22,7 +23,8 @@ const CHIPS = [
 
 const CITY_FILTERS = ['seattle', 'burien'];
 const CAT_FILTERS  = ['vote', 'meeting', 'filing', 'news', 'event', 'fundraiser'];
-const PAGE_GAP     = 16; // visible gap between pages during swipe
+const PAGE_GAP     = 16;
+const SKELETON_CARD_COUNT = 6;
 
 function getFilterForChip(chipValue: string) {
   const city     = CITY_FILTERS.includes(chipValue) ? chipValue : undefined;
@@ -30,33 +32,114 @@ function getFilterForChip(chipValue: string) {
   return { city, category };
 }
 
-function getAdjacentChipValue(chipValue: string, direction: 'left' | 'right') {
-  const idx  = CHIPS.findIndex(c => c.value === chipValue);
-  if (idx === -1) return null;
-  const next = direction === 'left' ? idx + 1 : idx - 1;
-  if (next < 0 || next >= CHIPS.length) return null;
-  return CHIPS[next].value;
+type SkeletonCardProps = {
+  shimmerTranslateX: Animated.AnimatedInterpolation<number>;
+  colors: {
+    card: string;
+    border: string;
+    block: string;
+    shimmer: string;
+  };
+};
+
+function SkeletonCard({ shimmerTranslateX, colors }: SkeletonCardProps) {
+  return (
+    <View style={[styles.skeletonCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.skeletonShimmer,
+          { backgroundColor: colors.shimmer, transform: [{ translateX: shimmerTranslateX }] },
+        ]}
+      />
+
+      <View style={styles.skeletonTopRow}>
+        <View style={[styles.skeletonBlock, styles.skeletonPillShort, { backgroundColor: colors.block }]} />
+        <View style={[styles.skeletonBlock, styles.skeletonPillTiny, { backgroundColor: colors.block }]} />
+      </View>
+
+      <View style={[styles.skeletonBlock, styles.skeletonTitle, { backgroundColor: colors.block }]} />
+      <View style={[styles.skeletonBlock, styles.skeletonBodyLineOne, { backgroundColor: colors.block }]} />
+      <View style={[styles.skeletonBlock, styles.skeletonBodyLineTwo, { backgroundColor: colors.block }]} />
+
+      <View style={styles.skeletonBottomRow}>
+        <View style={[styles.skeletonBlock, styles.skeletonMeta, { backgroundColor: colors.block }]} />
+        <View style={[styles.skeletonBlock, styles.skeletonMetaShort, { backgroundColor: colors.block }]} />
+      </View>
+    </View>
+  );
+}
+
+function SkeletonFeed({ dark }: { dark: boolean }) {
+  const shimmerProgress = useRef(new Animated.Value(0)).current;
+  const placeholders = useMemo(
+    () => Array.from({ length: SKELETON_CARD_COUNT }, (_, idx) => `skeleton-${idx}`),
+    []
+  );
+
+  const skeletonColors = useMemo(
+    () => dark
+      ? {
+          card: '#1D2430',
+          border: 'rgba(255,255,255,0.08)',
+          block: '#2A3341',
+          shimmer: 'rgba(255,255,255,0.12)',
+        }
+      : {
+          card: '#ECEFF3',
+          border: 'rgba(17,24,39,0.08)',
+          block: '#D7DDE5',
+          shimmer: 'rgba(255,255,255,0.52)',
+        },
+    [dark]
+  );
+
+  useEffect(() => {
+    const shimmerLoop = Animated.loop(
+      Animated.timing(shimmerProgress, {
+        toValue: 1,
+        duration: 1200,
+        useNativeDriver: true,
+      })
+    );
+
+    shimmerLoop.start();
+    return () => shimmerLoop.stop();
+  }, [shimmerProgress]);
+
+  const shimmerTranslateX = shimmerProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-260, 360],
+  });
+
+  return (
+    <FlatList
+      data={placeholders}
+      keyExtractor={item => item}
+      renderItem={() => <SkeletonCard shimmerTranslateX={shimmerTranslateX} colors={skeletonColors} />}
+      contentContainerStyle={styles.list}
+      showsVerticalScrollIndicator={false}
+    />
+  );
 }
 
 // ─── FeedPane ──────────────────────────────────────────────────────────────────
 type FeedPaneProps = {
   items: CivicItem[];
   loading: boolean;
+  hasFetched: boolean;
   error: string | null;
   refreshing: boolean;
   onRefresh: () => Promise<void>;
   renderItem: ({ item }: { item: CivicItem }) => React.ReactElement;
   textColor: string;
   errorColor: string;
+  dark: boolean;
 };
 
-function FeedPane({ items, loading, error, refreshing, onRefresh, renderItem, textColor, errorColor }: FeedPaneProps) {
-  if (loading && !refreshing) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator color={Colors.purple700} size="large" />
-      </View>
-    );
+function FeedPane({ items, loading, hasFetched, error, refreshing, onRefresh, renderItem, textColor, errorColor, dark }: FeedPaneProps) {
+  if ((!hasFetched || loading) && !refreshing) {
+    return <SkeletonFeed dark={dark} />;
   }
   if (error) {
     return (
@@ -89,160 +172,104 @@ function FeedPane({ items, loading, error, refreshing, onRefresh, renderItem, te
   );
 }
 
+type FeedPageProps = {
+  chipValue: string;
+  isActive: boolean;
+  onRefresh: () => Promise<void>;
+  renderItem: ({ item }: { item: CivicItem }) => React.ReactElement;
+  textColor: string;
+  errorColor: string;
+  dark: boolean;
+};
+
+function FeedPage({ chipValue, isActive, onRefresh, renderItem, textColor, errorColor, dark }: FeedPageProps) {
+  const filter = useMemo(() => getFilterForChip(chipValue), [chipValue]);
+  const { items, loading, error, hasFetched, refetch } = useCivicItems(filter, { enabled: isActive });
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    if (isActive) {
+      prefetchCivicItems(filter).catch(() => {});
+    }
+  }, [filter, isActive]);
+
+  const onPageRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    await onRefresh();
+    setRefreshing(false);
+  }, [onRefresh, refetch]);
+
+  return (
+    <View style={styles.pageWrap}>
+      <FeedPane
+        items={items}
+        loading={loading}
+        hasFetched={hasFetched}
+        error={error}
+        refreshing={refreshing}
+        onRefresh={onPageRefresh}
+        renderItem={renderItem}
+        textColor={textColor}
+        errorColor={errorColor}
+        dark={dark}
+      />
+    </View>
+  );
+}
+
 // ─── FeedScreen ────────────────────────────────────────────────────────────────
 export default function FeedScreen() {
   const scheme = useColorScheme();
   const dark   = scheme === 'dark';
   const t      = dark ? Colors.dark : Colors.light;
-  const { width } = useWindowDimensions();
-
-  // PAGE_WIDTH is the slot width for each pane in the 3-pane row (content + trailing gap).
-  // Row layout: [prev: width, gap: PAGE_GAP, active: width, gap: PAGE_GAP, next: width]
-  // Total row width = 3*width + 2*PAGE_GAP
-  //
-  // panX positions:
-  //   -(width + PAGE_GAP)        → active pane is centered (default)
-  //   0                          → prev pane is centered  (swiped right)
-  //   -(2*(width + PAGE_GAP))    → next pane is centered  (swiped left)
-  const PAGE_WIDTH = width + PAGE_GAP;
-
-  // panX drives the entire 3-pane row. Created once and never recreated.
-  const panX        = useRef(new Animated.Value(-PAGE_WIDTH)).current;
-  const isAnimating = useRef(false);
-
   const [activeChip, setActiveChip] = useState('all');
-  const [refreshing, setRefreshing] = useState(false);
+  const pagerRef = useRef<PagerView>(null);
 
-  // Stable refs for values read inside the PanResponder (avoids stale closures
-  // since the PanResponder is created once and never recreated).
-  const activeChipRef = useRef(activeChip);
-  const pageWidthRef  = useRef(PAGE_WIDTH);
-  const widthRef      = useRef(width);
-  useEffect(() => { activeChipRef.current = activeChip; },               [activeChip]);
-  useEffect(() => { pageWidthRef.current = PAGE_WIDTH; widthRef.current = width; }, [PAGE_WIDTH, width]);
+  const activeIndex = useMemo(
+    () => Math.max(CHIPS.findIndex(chip => chip.value === activeChip), 0),
+    [activeChip]
+  );
 
-  // Adjacent chip values (null at boundaries)
-  const prevChipValue = getAdjacentChipValue(activeChip, 'right');
-  const nextChipValue = getAdjacentChipValue(activeChip, 'left');
+  const prefetchNeighbors = useCallback((index: number) => {
+    const prevChip = CHIPS[index - 1];
+    const nextChip = CHIPS[index + 1];
 
-  const activeFilter = useMemo(() => getFilterForChip(activeChip),                              [activeChip]);
-  const prevFilter   = useMemo(() => prevChipValue ? getFilterForChip(prevChipValue) : {},       [prevChipValue]);
-  const nextFilter   = useMemo(() => nextChipValue ? getFilterForChip(nextChipValue) : {},       [nextChipValue]);
+    if (prevChip) {
+      prefetchCivicItems(getFilterForChip(prevChip.value)).catch(() => {});
+    }
+    if (nextChip) {
+      prefetchCivicItems(getFilterForChip(nextChip.value)).catch(() => {});
+    }
+  }, []);
 
-  const { items, loading, error, refetch }                                           = useCivicItems(activeFilter);
-  const { items: prevItems, loading: prevLoading, error: prevError }                 = useCivicItems(prevFilter, { enabled: !!prevChipValue });
-  const { items: nextItems, loading: nextLoading, error: nextError }                 = useCivicItems(nextFilter, { enabled: !!nextChipValue });
-
-  // Warm both neighbors whenever active chip changes
   useEffect(() => {
-    if (prevChipValue) prefetchCivicItems(getFilterForChip(prevChipValue)).catch(() => {});
-    if (nextChipValue) prefetchCivicItems(getFilterForChip(nextChipValue)).catch(() => {});
-  }, [activeChip, prevChipValue, nextChipValue]);
+    prefetchNeighbors(activeIndex);
+  }, [activeIndex, prefetchNeighbors]);
+
+  const handleChipPress = useCallback((chip: string) => {
+    const idx = CHIPS.findIndex(c => c.value === chip);
+    if (idx === -1) return;
+    setActiveChip(chip);
+    pagerRef.current?.setPage(idx);
+  }, []);
+
+  const onPageSelected = useCallback((event: { nativeEvent: { position: number } }) => {
+    const idx = event.nativeEvent.position;
+    const chip = CHIPS[idx]?.value;
+    if (!chip) return;
+    setActiveChip(chip);
+  }, []);
 
   const onRefresh = useCallback(async () => {
-    setRefreshing(true);
-    await refetch();
-    setRefreshing(false);
-  }, [refetch]);
-
-  // PanResponder — created ONCE (useRef) so renders never recreate it.
-  // All dynamic values are read from refs, not from the closure.
-  const panResponder = useRef(PanResponder.create({
-    onMoveShouldSetPanResponder: (_, { dx, dy }) =>
-      !isAnimating.current &&
-      Math.abs(dx) > 10 &&
-      Math.abs(dx) > Math.abs(dy) * 1.5,
-
-    onPanResponderMove: (_, { dx }) => {
-      const pw      = pageWidthRef.current;
-      const chip    = activeChipRef.current;
-      const hasNext = !!getAdjacentChipValue(chip, 'left');
-      const hasPrev = !!getAdjacentChipValue(chip, 'right');
-
-      // Heavy rubber-band resistance at edges; tracking 1:1 otherwise
-      const atEdge   = (dx < 0 && !hasNext) || (dx > 0 && !hasPrev);
-      const factor   = atEdge ? 0.12 : 1;
-      panX.setValue(-pw + dx * factor);
-    },
-
-    onPanResponderRelease: (_, { dx, vx }) => {
-      const pw        = pageWidthRef.current;
-      const w         = widthRef.current;
-      const chip      = activeChipRef.current;
-      const threshold = w * 0.25; // 25% screen width or velocity threshold
-
-      const toNext = (dx < -threshold || vx < -0.4) && !!getAdjacentChipValue(chip, 'left');
-      const toPrev = (dx >  threshold || vx >  0.4) && !!getAdjacentChipValue(chip, 'right');
-
-      if (toNext) {
-        isAnimating.current = true;
-        Animated.spring(panX, {
-          toValue: -2 * pw,
-          useNativeDriver: true,
-          velocity: vx,
-          tension: 220,
-          friction: 36,
-        }).start(({ finished }) => {
-          if (finished) {
-            isAnimating.current = false;
-            // Reset position BEFORE state change so the new pane layout
-            // and the correct panX land in the same native draw frame.
-            panX.setValue(-pageWidthRef.current);
-            setActiveChip(getAdjacentChipValue(chip, 'left')!);
-          }
-        });
-      } else if (toPrev) {
-        isAnimating.current = true;
-        Animated.spring(panX, {
-          toValue: 0,
-          useNativeDriver: true,
-          velocity: vx,
-          tension: 220,
-          friction: 36,
-        }).start(({ finished }) => {
-          if (finished) {
-            isAnimating.current = false;
-            // Reset position BEFORE state change — same reasoning as toNext branch.
-            panX.setValue(-pageWidthRef.current);
-            setActiveChip(getAdjacentChipValue(chip, 'right')!);
-          }
-        });
-      } else {
-        // Not enough — spring back to center
-        Animated.spring(panX, {
-          toValue: -pw,
-          useNativeDriver: true,
-          velocity: vx,
-          tension: 220,
-          friction: 36,
-        }).start(() => { isAnimating.current = false; });
-      }
-    },
-
-    onPanResponderTerminate: () => {
-      const pw = pageWidthRef.current;
-      Animated.spring(panX, {
-        toValue: -pw,
-        useNativeDriver: true,
-        tension: 220,
-        friction: 36,
-      }).start(() => { isAnimating.current = false; });
-    },
-  })).current;
-
-  // Direct chip-tap: instant position reset (no swipe animation needed)
-  const handleChipPress = useCallback((chip: string) => {
-    setActiveChip(chip);
-    panX.setValue(-PAGE_WIDTH);
-  }, [panX, PAGE_WIDTH]);
+    const chip = CHIPS[activeIndex];
+    if (!chip) return;
+    await prefetchCivicItems(getFilterForChip(chip.value));
+  }, [activeIndex]);
 
   const renderItem = useCallback(({ item }: { item: CivicItem }) => (
-    <CivicCard item={item} onStarToggle={refetch} />
-  ), [refetch]);
-
-  // The 3-pane row is absolutely positioned so its height fills feedStage without
-  // constraining its width (which must be wider than the screen).
-  const rowWidth = 3 * width + 2 * PAGE_GAP;
+    <CivicCard item={item} onStarToggle={onRefresh} />
+  ), [onRefresh]);
 
   return (
     <View style={[styles.screen, { backgroundColor: t.background }]}>
@@ -253,72 +280,95 @@ export default function FeedScreen() {
         onChipPress={handleChipPress}
       />
 
-      <View style={styles.feedStage} {...panResponder.panHandlers}>
-        <Animated.View style={[styles.panesRow, { width: rowWidth, transform: [{ translateX: panX }] }]}>
-
-          {/* ── Prev pane ─────────────────────────────────── */}
-          <View style={[styles.pane, { width, marginRight: PAGE_GAP }]}>
-            {prevChipValue ? (
-              <FeedPane
-                items={prevItems}
-                loading={prevLoading}
-                error={prevError}
-                refreshing={false}
-                onRefresh={onRefresh}
-                renderItem={renderItem}
-                textColor={t.textTertiary}
-                errorColor={t.textSecondary}
-              />
-            ) : null}
-          </View>
-
-          {/* ── Active pane ───────────────────────────────── */}
-          <View style={[styles.pane, { width, marginRight: PAGE_GAP }]}>
-            <FeedPane
-              items={items}
-              loading={loading}
-              error={error}
-              refreshing={refreshing}
+      <PagerView
+        ref={pagerRef}
+        style={styles.feedStage}
+        initialPage={activeIndex}
+        pageMargin={PAGE_GAP}
+        overdrag
+        offscreenPageLimit={2}
+        onPageSelected={onPageSelected}
+      >
+        {CHIPS.map(chip => (
+          <View key={chip.value}>
+            <FeedPage
+              chipValue={chip.value}
+              isActive={chip.value === activeChip}
               onRefresh={onRefresh}
               renderItem={renderItem}
               textColor={t.textTertiary}
               errorColor={t.textSecondary}
+              dark={dark}
             />
           </View>
-
-          {/* ── Next pane ─────────────────────────────────── */}
-          <View style={[styles.pane, { width }]}>
-            {nextChipValue ? (
-              <FeedPane
-                items={nextItems}
-                loading={nextLoading}
-                error={nextError}
-                refreshing={false}
-                onRefresh={onRefresh}
-                renderItem={renderItem}
-                textColor={t.textTertiary}
-                errorColor={t.textSecondary}
-              />
-            ) : null}
-          </View>
-
-        </Animated.View>
-      </View>
+        ))}
+      </PagerView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen:    { flex: 1 },
-  feedStage: { flex: 1, overflow: 'hidden' },
-  // Absolute fill so height is always defined (enables flex children to stretch),
-  // while width is set inline (wider than the screen).
-  panesRow: {
-    position: 'absolute',
-    top: 0, bottom: 0, left: 0,
-    flexDirection: 'row',
-  },
-  pane:   { flex: 1 },
+  feedStage: { flex: 1 },
+  pageWrap: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60 },
   list:   { paddingTop: 12, paddingHorizontal: 12, paddingBottom: 32 },
+  skeletonCard: {
+    borderRadius: 14,
+    borderWidth: 0.5,
+    padding: 14,
+    marginBottom: 10,
+    overflow: 'hidden',
+  },
+  skeletonShimmer: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: '44%',
+  },
+  skeletonTopRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  skeletonBottomRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 10,
+  },
+  skeletonBlock: {
+    borderRadius: 8,
+  },
+  skeletonPillShort: {
+    width: 66,
+    height: 22,
+    borderRadius: 12,
+  },
+  skeletonPillTiny: {
+    width: 54,
+    height: 22,
+    borderRadius: 12,
+  },
+  skeletonTitle: {
+    width: '82%',
+    height: 22,
+    marginBottom: 10,
+  },
+  skeletonBodyLineOne: {
+    width: '100%',
+    height: 14,
+    marginBottom: 8,
+  },
+  skeletonBodyLineTwo: {
+    width: '74%',
+    height: 14,
+  },
+  skeletonMeta: {
+    width: 130,
+    height: 14,
+  },
+  skeletonMetaShort: {
+    width: 92,
+    height: 14,
+  },
 });
