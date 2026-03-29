@@ -2,3 +2,4 @@
 node_modules/
 civic-scraper-frontend/node_modules/
 civic-scraper-frontend/.expo/
+civic-scraper/supabase/.temp/
