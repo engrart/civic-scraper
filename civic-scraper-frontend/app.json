@@ -9,8 +9,12 @@
       "backgroundColor": "#534AB7"
     },
     "ios": {
+      "icon": "./assets/images/civic-icon-final.jpg",
       "supportsTablet": false,
-      "bundleIdentifier": "com.yourname.civicapp"
+      "bundleIdentifier": "com.yourname.civicapp",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -22,6 +26,12 @@
     "plugins": [
       "expo-router",
       "expo-asset"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c3e3d852-11bc-4630-a0cc-c7d0d2e68c4c"
+      }
+    }
   }
 }
