@@ -27,7 +27,7 @@ async function scrapeSeattleCouncil() {
     const events = await res.json();
     for (const e of events) {
       items.push({
-        source_url: `https://seattle.legistar.com/MeetingDetail.aspx?ID=${e.EventId}&GUID=${e.EventGuid}&Options=info&Search=`,
+        source_url: e.EventInSiteURL || `https://seattle.legistar.com/MeetingDetail.aspx?LEGID=${e.EventId}&GID=393&G=${e.EventGuid}`,
         source_name: 'Seattle City Council',
         title: `${e.EventBodyName}: ${e.EventAgendaStatusName}`,
         body: [e.EventBodyName, e.EventLocation].filter(Boolean).join('\n'),
@@ -49,8 +49,10 @@ async function scrapeSeattleCouncil() {
     const matters = await res.json();
     for (const m of matters) {
       if (!m.MatterTitle) continue;
+      // LegislationDetail.aspx is blocked on Seattle's Legistar (returns "Invalid parameters!").
+      // Fall back to the search page which at least pre-fills the query.
       items.push({
-        source_url: `https://seattle.legistar.com/LegislationDetail.aspx?ID=${m.MatterId}&GUID=${m.MatterGuid}&Search=`,
+        source_url: `https://seattle.legistar.com/Legislation.aspx?Search=${encodeURIComponent(m.MatterFile || m.MatterTitle || '')}`,
         source_name: 'Seattle City Council',
         title: m.MatterTitle.trim(),
         body: [m.MatterTypeName, m.MatterTitle, `Status: ${m.MatterStatusName}`].join('\n'),
