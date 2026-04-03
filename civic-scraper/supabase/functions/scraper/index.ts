@@ -47,12 +47,32 @@ async function scrapeSeattleCouncil() {
       'https://webapi.legistar.com/v1/seattle/matters?$top=20&$orderby=MatterLastModifiedUtc desc'
     );
     const matters = await res.json();
-    for (const m of matters) {
-      if (!m.MatterTitle) continue;
-      // LegislationDetail.aspx is blocked on Seattle's Legistar (returns "Invalid parameters!").
-      // Fall back to the search page which at least pre-fills the query.
+    const filteredMatters = (matters as any[]).filter((m: any) => m.MatterTitle);
+
+    // Fetch attachment URLs in parallel — prefer PDF over search page (search page
+    // pre-fills the query but doesn't auto-execute, so users see 0 results).
+    const sourceUrls = await Promise.all(filteredMatters.map(async (m: any) => {
+      try {
+        const aRes = await fetch(
+          `https://webapi.legistar.com/v1/seattle/matters/${m.MatterId}/attachments`
+        );
+        const attachments: any[] = await aRes.json();
+        const visible = attachments.filter(
+          (a: any) => a.MatterAttachmentShowOnInternetPage && a.MatterAttachmentHyperlink
+        );
+        const pdf = visible.find((a: any) =>
+          (a.MatterAttachmentHyperlink as string).toLowerCase().endsWith('.pdf')
+        );
+        const best = pdf || visible[0];
+        if (best) return best.MatterAttachmentHyperlink as string;
+      } catch { /* fall through */ }
+      return `https://seattle.legistar.com/Legislation.aspx?Search=${encodeURIComponent(m.MatterFile || m.MatterTitle || '')}`;
+    }));
+
+    for (let i = 0; i < filteredMatters.length; i++) {
+      const m = filteredMatters[i];
       items.push({
-        source_url: `https://seattle.legistar.com/Legislation.aspx?Search=${encodeURIComponent(m.MatterFile || m.MatterTitle || '')}`,
+        source_url: sourceUrls[i],
         source_name: 'Seattle City Council',
         title: m.MatterTitle.trim(),
         body: [m.MatterTypeName, m.MatterTitle, `Status: ${m.MatterStatusName}`].join('\n'),
@@ -112,9 +132,11 @@ async function scrapeRSS(name: string, url: string, city: string, tags: string[]
     const blocks = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
     for (const match of blocks) {
       const b = match[1];
-      const title   = (b.match(/<title><!\[CDATA\[(.*?)\]\]>|<title>(.*?)<\/title>/)?.[1] ?? '').replace(/<[^>]+>/g, '').trim();
-      const link    = (b.match(/<link>(.*?)<\/link>/)?.[1] ?? '').trim();
-      const desc    = (b.match(/<description><!\[CDATA\[([\s\S]*?)\]\]>|<description>([\s\S]*?)<\/description>/)?.[1] ?? '').replace(/<[^>]+>/g, '').slice(0, 400).trim();
+      const titleM  = b.match(/<title><!\[CDATA\[(.*?)\]\]>|<title>(.*?)<\/title>/);
+      const title   = (titleM?.[1] ?? titleM?.[2] ?? '').replace(/<[^>]+>/g, '').trim();
+      const link    = (b.match(/<link>([\s\S]*?)<\/link>/)?.[1] ?? '').trim();
+      const descM   = b.match(/<description><!\[CDATA\[([\s\S]*?)\]\]>|<description>([\s\S]*?)<\/description>/);
+      const desc    = (descM?.[1] ?? descM?.[2] ?? '').replace(/<[^>]+>/g, '').slice(0, 400).trim();
       const pubDate = b.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] ?? null;
       if (!title || !link) continue;
       if (!POLITICAL.test(title + ' ' + desc)) continue;
